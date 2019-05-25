@@ -32,9 +32,11 @@ Enumerate:
 Tabucular
 
 ```
-[table(((Table.line Table.line) (Table.line) () () () () (Table.line)) (() () () () ()))]
-$(Center-Row 1 50 837 930)
-$(Center-Row 2 47 877 230)
+[table row-lines=((Table.line Table.line) (Table.line) () () () () (Table.line)) column-lines=(() () () () ()))]
+$Table(content=(
+(1 50 837 930)
+(2 47 877 230)
+(3 23 342 231)), align=center)
 [/table]
 ```
 

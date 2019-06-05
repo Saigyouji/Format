@@ -1,0 +1,10 @@
+[def-env frame ((title "") (fragile false)) (l (list string))]
+[body]
+(begin
+    (define s (make-content l))
+    (define bg "\\begin{frame}")
+    (if fragile (set! bg (format "%s\[fragile\]" bg)) ())
+    (if (equal? title "") () (set! bg (format "%s\n\\frametitle{%s}" bg title)))
+    (format "%s\n%s\n\\end{frame}\n" bg s))
+[/body]
+[/def-env]

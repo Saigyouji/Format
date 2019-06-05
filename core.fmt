@@ -1,0 +1,83 @@
+(define-template-function (T1 T2) (map (l (template (T1)list)) (f (function (T1) T2))) (template (T2)list)
+    (if (null? l) (list (T2))
+        (cons (f (car l)) (map (T1 T2) (cdr l) f))))
+
+(define-template-function (T) (foldl (l (template (T) list)) (f (function (T T) T))) T
+    (if (null? (cdr l)) (car l)
+        (f (car l) (foldl (T) (cdr l) f))))
+
+(define (concat-string (a string) (b string)) string
+    (format "%s%s" a b))
+
+(define (join-string (l (template (string) list))) string
+    (foldl (string) l concat-string))
+
+(define (add-endline (s string)) string
+    (format "%s\n" s))
+
+(define (add-dual-endline (s string)) string
+    (format "%s\n\n" s))
+
+(define (make-content (l (template (string) list))) string
+    (join-string (map (string string) l add-dual-endline)))
+
+(define (simple-env (l (template (string) list)) (env-name string)) string
+    (let ((s (make-content l)))
+        (format "\\begin{%s}\n%s\n\\end{%s}\n" env-name s env-name)))
+
+(define (join-lines (l (template (string) list))) string
+    (join-string (map (string string) l add-endline)))
+
+[def-env header ((title "") (author "") (type "article") (include (list (string)))) (l (list string))]
+[body]
+    (begin
+        (define set-class (format "\\documentclass{%s}\n" type))
+        (define set-title (if (equal? title "") "" (format "\\title{%s}\n" title)))
+        (define set-author (if (equal? author "") "" (format "\\author{%s}\n" author)))
+        (define (add-include (s string)) string (format "\\usepackage{%s}\n" s))
+        (define use-package (join-string (map (string string) include add-include)))
+        (define s (join-string (map (string string) l add-endline)))
+        (format "%s%s%s%s%s" set-class set-title set-author use-package s))
+[/body]
+[/def-env]
+
+[def-env document () (l (list string))]
+[body]
+    (simple-env l "document")
+[/body]
+[/def-env]
+
+(define-struct Item (define content ""))
+
+[def-env item () (l (list string))]
+[body]
+    (begin (define a (Item)) (set! a (Item-set!-content a (join-string l))) a)
+[/body]
+[/def-env]
+
+[def-env itemize () (l (list Item))]
+[body]
+(begin
+    (define f (lambda ((s Item)) string (format "\\item %s" (Item-get-content s))))
+    (define l (map (Item string) l f))
+    (define s (join-string (map (string string) l add-endline)))
+    (format "\\begin{itemize}\n%s\n\\end{itemize}\n" s))
+[/body]
+[/def-env]
+
+[def-env source ((lang "raw")) (l (list string))]
+[body]
+(begin
+    (define s (join-lines l))
+    (define bg "\\begin{minted}")
+    (if (equal? lang "") void (set! bg (format "%s{%s}" bg lang)))
+    (format "%s\n%s\n\\end{minted}\n" bg s))
+[/body]
+[/def-env]
+
+
+[def-env small-font () (l (list string))]
+[body]
+    (format "{\\small\n%s\n}" (join-lines l))
+[/body]
+[/def-env]

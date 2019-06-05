@@ -1,0 +1,279 @@
+%import core
+%import beamer
+%import my
+
+[header type = "beamer" title = "Typed ForMaTing System" author = "张宇博，吴瑾昭，许涵" include = (list (string) "amsmath" "ctex" "minted" "graphicx")]
+\usetheme{CambridgeUS}
+[/header]
+
+[document]
+
+[frame]
+    \titlepage
+[/frame]
+
+[frame title = "Motivation"]
+    \LaTeX 是一门重要的排版语言，但这门排版语言主要是由宏构成的，我们希望能通过在其中加入类型系统来简化宏包的编写以及规范用户的使用。
+
+    [itemize]
+        [item] Plain text: Abcdef [/item]
+        [item] Text(with other format): ((Bold abfgh) (Math adewiosa) (Italic asdjiqwe)) [/item]
+        [item] Graph: (Graphic "./a.png") [/item]
+    [/itemize]
+
+    目前的版本的类型系统还没有加入 Subtyping ，但的确 Subtyping 也是十分重要的 (比如 Plain Text 就是 Text 的 Subtype)。
+[/frame]
+
+
+
+[frame title = "设计过程"]
+    作为一门排版语言，最重要的首先是能够完成排版任务，但是从头写起一门排版语言是一门十分艰巨的任务。
+    于是我们选择让 FMT 编译到 \LaTeX 上，一方面可以借助 \LaTeX 成熟的排版功能完成任务，另一方面 \LaTeX 代码本身也是描述文本的一种方式，因此返回 \LaTeX 代码也就是返回了文本的格式。
+    FMT 中需要一门编程语言来处理计算任务，我们希望它是一门静态类型的解释型语言。由于我们希望能控制它的 typing 和 evaluation ，我们选择自己实现一门 Lisp 方言。
+    生成一篇文档的流程是: FMT 处理器将 FMT 输出为 FMT-Lisp ， FMT-Lisp 解释器做 Typing 通过后执行 Lisp 文件得到 \LaTeX 代码。
+    把原来 \LaTeX 的错误处理从运行时检查变成了三次分段检查。通过 FMT-Lisp 的类型检查规避用户的类型错误，通过 FMT 处理器在编译时处理宏包内部冲突的问题。
+[/frame]
+
+[frame title = "设计过程" fragile = true]
+    如何对排版的过程进行抽象？
+    我们的思路是改造 \LaTeX 中的 Environment ，我们举一个例子：
+[source lang="latex"]
+\begin{figure}\[placement\] % Can be \[h/t/b/p\]
+body of the figure
+\caption{figure title}
+\end{figure}
+[/source]
+我们容易看出，Environment 分为两部分，参数和内容。于是我们可以把 Environment 看成 RetType env(args: Record)(content: List\[T\])，每行表示一个 content 中的一个元素。
+通过检查这些参数的类型和 List\[T\] 的类型，我们可以避免 Environment 接受不合理的参数。比如说在 itemize 环境中就不会接受 Graph 的参数。
+[/frame]
+
+[frame title = "FMT-Lisp 介绍"]
+    这门 Lisp 方言的实现是独立于 FMT 的编译器存在的，主要由吴瑾昭和许涵完成。
+    由于是为 FMT 定制的 Lisp 方言因此许多语法比较简陋，但是实现了一些 FMT 所需要的 feature 。
+    首先，我们采用了Racket。Racket作为一个元语言系统，在解释Lisp方言上具有得天独厚的优势。
+
+    [itemize]
+        [item] 静态类型: FMT-Lisp 是一门静态强类型语言，在运行前进行类型检查，避免运行时才发现问题。不过 FMT-Lisp 只支持基本的类型系统(和C差不多的程度)。允许用户自定义类型，类型中的每一个成员都必须有一个初始值。 [/item]
+        [item] 泛型： FMT-Lisp 允许在函数和自定义使用基本的泛型（尽管 FMT-Lisp 不会对类型进行任何推断而是要求用户明确给出类型参数） [/item]
+        [item] 默认参数/用名称传参：这是自 \LaTeX 继承下来的 feature ，在 \LaTeX 中被大量使用，由于 FMT-Lisp 没有实现 Subtype ，因此这里我们用一个新建类型包括进来所有参数，用类型的初始值来实现默认参数的效果。 [/item]
+    [/itemize]
+[/frame]
+
+[frame title = "FMT-Lisp Typing"]
+    解释器方面采用了Racket。Racket作为一个元语言系统，在解释Lisp方言上具有得天独厚的优势。
+	具体的实现和普通的解释器区别不大。
+
+    Basic-Type:
+
+    [itemize]
+        [item] string [/item]
+        [item] number [/item]
+        [item] boolean [/item]
+        [item] format [/item]
+    [/itemize]
+
+    Example:
+    $ 1\Rightarrow \mathtt{number} $
+    $ \mathtt{true}\Rightarrow \mathtt{boolean} $
+    $ (\mathtt{set!}\ x\ 10)\Rightarrow \mathtt{void} $
+[/frame]
+
+[frame title = "FMT-Lisp Typing"]
+    Function-Type:
+	$\mathtt{(function\ (type_1,type_2, \ldots)\ return-type)}$
+Example:
+	$\mathtt{(lambda\ ((x\ number)\ (y\ number))\ number\ (+\ x\ y))}$
+    $\Rightarrow \mathtt{(function\ (number\ number)\ number)}$
+	$\mathtt{(define\ (f\ (x\ number))\ string\ ``ok")\ \Rightarrow void}$
+	$\mathtt{f\Rightarrow (function\ (number)\ string)}$
+[/frame]
+
+[frame title = "FMT-Lisp Typing"]
+Struct-Type:
+	typename
+Example:
+[mathtt](define-struct node (define x 1) (define b true))=>void[/mathtt]
+[mathtt](node)=>node[/mathtt]
+[mathtt](node-get-x (node (b false)))=>number[/mathtt]
+[mathtt](node-set!-x (node) false)=>node[/mathtt]
+
+[/frame]
+
+[frame title = "FMT-Lisp Typing"]
+Template-Type:
+	[mathtt](template (T_1,T_2,\ldots) type)[/mathtt]
+Example:
+    [mathtt](define-template-struct (T) node[/mathtt]
+    [mathtt](define x T)(define b true))\Rightarrow@void[/mathtt]
+    [mathtt](node (string) (x ``1")(b false))\Rightarrow@(template (string) node)[/mathtt]
+    [mathtt](node-get-x (node(number)))\Rightarrow@number[/mathtt]
+    [mathtt](node-set!-b (node(boolean)) true)\Rightarrow@template (boolean) node)[/mathtt]
+    [mathtt](define-template-function (T1 T2) (f (x1 T1)(x2 T2)) T1 x1)\Rightarrow@void[/mathtt]
+    [mathtt]f\Rightarrow@(template (T1 T2) (function (T1 T2) T1))[/mathtt]
+    [mathtt](f (string number) ``ok" 2)\Rightarrow@string[/mathtt]
+[/frame]
+
+[frame title = "FMT-Lisp Typing"]
+Sugar:
+	auto
+	list
+Example:
+[small-font]
+[mathtt](define-template-function (T1 T2) (f (x1 T1)(x2 T2)) auto x1)\Rightarrow@void[/mathtt]
+[mathtt]f\Rightarrow@(template (T1 T2) (function (T1 T2) T1))[/mathtt]
+[mathtt](lambda ((x number) (b boolean)) auto (lambda ((y string)) auto y))[/mathtt]
+[mathtt]=>(function (number boolean) (function (string) string))[/mathtt]
+[mathtt](list (number) 1 2 3 4)=>(template (number) list)[/mathtt]
+[mathtt](car (list (string) ``ok"))=>string[/mathtt]
+[mathtt](cdr (list (string) ``ok"))=>(template (string) list)[/mathtt]
+[/small-font]
+[/frame]
+
+[frame title = "FMT-Lisp Typing"]
+Application and other functions:
+Example:
+[mathtt](define (f (x number)) string ``ok")=>void[/mathtt]
+[mathtt](f 1)=>string[/mathtt]
+[mathtt](define x 10)=>void[/mathtt]
+[mathtt](set! x 11)=>void[/mathtt]
+[mathtt](+ 1 2)=>number[/mathtt]
+[mathtt](let ((x 1) (y 2)) (+ x y) (/ x y)) =>number[/mathtt]
+cond/begin/if
+[/frame]
+
+[frame title = "FMT-Lisp Evaluation"]
+	$\mathtt{eval~exp~env}$表示在env环境下计算exp表达式的值
+
+	\includegraphics\[width = 3.5in\]{eval.png}
+[/frame]
+
+[frame title = "FMT-Lisp - Environment(Lisp)"]
+一个“环境” 是一个pair，car是一个“框架”，cdr是指向上一层(外围)“环境”的指针。最上层(最外围的)的“环境”的cdr是空指针。
+“框架”(frame) 是一个列表，其car是一个列表，该列表中的每一项都是一个变量名 (过程名也可以看做是个变量)。cdr里的项和 car里的变量依次一一对应，是变量的 值。car里的变量不能重名。
+一个变量在一个环境里的值，就是它在该环境里的框架里的约束值。在该框架里找不 到约束值，就到其外围环境继续寻找。
+程序开始运行时，有一个顶层环境(称为glb-env),其中包含基本过程，比如 + ,-, cdr, car, map ....等的约束(变量及其值的对应关系)
+[/frame]
+
+[frame title = "FMT-Lisp - Struct"]
+    选择使用一个$\mathtt{(list\ 'struct\ (list\ name_1\ val_1)\ (list \ name_2\ val_2) \cdots )}$来表示一个struct。
+	get和set!直接遍历list修改即可。
+[/frame]
+
+[frame title = "FMT Evaluation" fragile = true]
+    如何建立 FMT 与 FMT-Lisp 之间的关系？
+    把一个个表达式代入求值？
+[source lang = "scheme"]
+\[itemize\]
+\[item\] item1 \[/item\]
+\[item\] item2 \[/item\]
+\[item\] item3 \[/item\]
+\[/itemize\]
+[/source]
+    Environment 之间的嵌套形成一棵树。
+
+[source lang = "scheme"]
+(let ((a1 (item1)) (a2 (item2) (a3 item3)))
+    ((itemize) (list (Item) a1 a2 a3)))
+[/source]
+
+    按照嵌套关系建成 let 关系的树，把 Environment 转化成一个 Let 表达式。
+[/frame]
+
+[frame title = "FMT Example - Environment" fragile = true]
+[small-font]
+[source lang = "scheme"]
+(define-struct Item (define content ""))
+
+\[def-env item () (l (list string))\]
+\[body\]
+    (begin (define a (Item)) (set! a
+    (Item-set!-content a (join-string l))) a)
+\[/body\]
+\[/def-env\]
+\[def-env itemize () (l (list Item))\]
+\[body\]
+(begin
+    (define f (lambda ((s Item)) string
+    (format "\\item %s" (Item-get-content s))))
+    (define l (map (Item string) l f))
+    (define s (join-string (map (string string) l add-endline)))
+    (format "\\begin{itemize}\n%s\n\\end{itemize}\n" s))
+\[/body\]
+\[/def-env\]
+[/source]
+[/small-font]
+[/frame]
+
+[frame title = "FMT Example - Env Call" fragile = true]
+[source lang = "scheme"]
+\[itemize\]
+\[item\] item 1 \[/item\]
+\[item\] item 2 \[/item\]
+\[item\] item 3 \[/item\]
+\[/itemize\]
+[/source]
+[/frame]
+
+
+[frame title = "最初的设计目标"]
+快速检查：由于我们先进行类型检查才会运行程序得到 \LaTeX 代码，运行得到 \LaTeX 代码后才会启动较慢的编译过程，因此的确加快了检查的速度。
+易于扩展：可扩展性的确变强了，通过 Lisp 的支持，我们现在可以做一些之前不容易办到的事，比如：
+直接把数组变成表格输出(从文件读入数据直接转化成表格等)
+在开题时的 Tikz 的例子
+在内部做一个 graphviz
+...
+编译信息：由于我们采取了 FMT -> FMT-Lisp -> \LaTeX 的线路，因此没有办法输出合理的错误位置。如果需要精确的编译错误可能还是要将排版语言和计算语言统一起来编译。
+[/frame]
+
+[frame title = "回顾与展望"]
+为什么用 \LaTeX ？
+精确的排版控制 - 为专业人员提供调整的空间
+自动化的排版控制 - 把排版细节隐藏到宏包里尽可能少的暴露给用户
+在精确上更进一步 —— 自己重写排版输出的部分，采用不同的底层描述
+在自动化上更进一步 —— 改变语法，增加类型系统，异常系统，真正地把排版细节隐藏下去 (目前试图完成的事)
+为什么用 Word ？
+所见即所得
+快速地进行修改
+描述可以用图形界面操作的排版？
+[/frame]
+
+[frame title = "Do It Yourself" fragile = true]
+
+[small-font]
+在做 slide 的时候，许涵丢来了这样的一个 PPT ，刚开始我打算：
+[source lang = "latex"]
+$\mathtt{(define\ (f\ (x\ number))\ string\ ``ok")
+\ \Rightarrow void}$
+[/source]
+
+幸好 FMT 把我从这些事情中解脱出来了
+[source lang = "scheme"]
+\[def-env mathtt () (l (list string))\]
+\[body\]
+    (begin (define s (string-replace (join-string l) " " "\\ "))
+           (set! s (string-replace (string-replace s "@" " ") "-"
+           "\\textrm{-}"))
+           (set! s (string-replace s "=>" "\\Rightarrow "))
+           (format "$\\mathtt{%s}$" s))
+\[/body\]
+\[/def-env\]
+[/source]
+[/small-font]
+[/frame]
+
+[frame title = "Do It Yourself"]
+    \LaTeX 社区中有许多熟悉设计与排版的人，为社区贡献了许多模板，只要在模板中填充内容后就可以得到精美的文档。但如果你想对模板有什么修改，就必须要对这个模板有所了解才行。
+
+    我希望能直接传给模板它需要的参数，把它当做一个黑盒使用，或者从模板里分离一些功能出来。
+
+    排版是一件很复杂的事情，\LaTeX 在一定程度上简化了排版，但我们还希望它能更简单一点。少一些坑，让用户少上会 stackexchange 。
+
+    我们希望当用户想要什么的时候，能一拍脑袋自己写出来，而不是对着一长串文档发呆。
+
+    Thank you for listening!
+[/frame]
+
+
+
+
+[/document]

@@ -1,0 +1,8 @@
+[def-env mathtt () (l (list string))]
+[body]
+    (begin (define s (string-replace (join-string l) " " "\\ "))
+           (set! s (string-replace (string-replace s "@" " ") "-" "\\textrm{-}"))
+           (set! s (string-replace s "=>" "\\Rightarrow "))
+           (format "$\\mathtt{%s}$" s))
+[/body]
+[/def-env]
